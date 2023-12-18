@@ -9,7 +9,7 @@
 [6]: https://github.com/go-spring-projects/web/releases/latest
 [7]: https://github.com/go-spring-projects/web/workflows/Go%20Test/badge.svg?branch=master
 [8]: https://github.com/go-spring-projects/web/actions?query=branch%3Amaster
-[9]: https://codecov.io/gh/go-spring-projects/web/graph/badge.svg?token=BQ6OKWWOF0
+[9]: https://codecov.io/gh/go-spring-projects/web/graph/badge.svg?token=29W9JV6BUN
 [10]: https://codecov.io/gh/go-spring-projects/web
 
 The `web` package aims to provide a simpler and more user-friendly development experience.
