@@ -58,6 +58,6 @@ func TestXmlRenderer(t *testing.T) {
 	err := render.Render(w)
 
 	assert.Nil(t, err)
-	assert.Equal(t, render.ContentType(), "application/xml; charset=utf-8")
-	assert.Equal(t, w.Body.String(), "<map><foo>bar</foo></map>")
+	assert.Equal(t, "application/xml; charset=utf-8", render.ContentType())
+	assert.Equal(t, "<map><foo>bar</foo></map>", w.Body.String())
 }

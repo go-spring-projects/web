@@ -37,7 +37,7 @@ func TestRedirectRenderer(t *testing.T) {
 	w := httptest.NewRecorder()
 	err = data1.Render(w)
 	assert.Nil(t, err)
-	assert.Equal(t, data1.ContentType(), "")
+	assert.Equal(t, "", data1.ContentType())
 
 	data2 := RedirectRenderer{
 		Code:     http.StatusOK,

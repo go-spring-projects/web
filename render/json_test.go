@@ -35,6 +35,6 @@ func TestJSONRenderer(t *testing.T) {
 	err := render.Render(w)
 	assert.Nil(t, err)
 
-	assert.Equal(t, render.ContentType(), "application/json; charset=utf-8")
-	assert.Equal(t, w.Body.String(), "{\"foo\":\"bar\",\"html\":\"\\u003cb\\u003e\"}\n")
+	assert.Equal(t, "application/json; charset=utf-8", render.ContentType())
+	assert.Equal(t, "{\"foo\":\"bar\",\"html\":\"\\u003cb\\u003e\"}\n", w.Body.String())
 }

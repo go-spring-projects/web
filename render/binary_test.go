@@ -37,6 +37,6 @@ func TestBinaryRenderer(t *testing.T) {
 	err := render.Render(w)
 	assert.Nil(t, err)
 
-	assert.Equal(t, render.ContentType(), "application/octet-stream")
-	assert.Equal(t, w.Body.Bytes(), data)
+	assert.Equal(t, "application/octet-stream", render.ContentType())
+	assert.Equal(t, data, w.Body.Bytes())
 }

@@ -34,6 +34,6 @@ func TestTextRenderer(t *testing.T) {
 	err := render.Render(w)
 
 	assert.Nil(t, err)
-	assert.Equal(t, render.ContentType(), "text/plain; charset=utf-8")
-	assert.Equal(t, w.Body.String(), "hello bob 2")
+	assert.Equal(t, "text/plain; charset=utf-8", render.ContentType())
+	assert.Equal(t, "hello bob 2", w.Body.String())
 }

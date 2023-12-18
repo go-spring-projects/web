@@ -77,12 +77,13 @@ func (r *MockRequest) RequestBody() io.Reader {
 }
 
 type ScopeBindParam struct {
-	A string `path:"a"`
-	B string `path:"b"`
-	C string `path:"c" query:"c"`
-	D string `query:"d"`
-	E string `query:"e" header:"e"`
-	F string `cookie:"f"`
+	A string  `path:"a"`
+	B int     `path:"b"`
+	C uint    `path:"c" query:"c"`
+	D float32 `query:"d"`
+	E string  `query:"e" header:"e"`
+	F string  `cookie:"f"`
+	G bool    `query:"g"`
 }
 
 func TestScopeBind(t *testing.T) {
@@ -95,6 +96,7 @@ func TestScopeBind(t *testing.T) {
 			"c": "3",
 			"d": "4",
 			"e": "5",
+			"g": "true",
 		},
 		pathParams: map[string]string{
 			"a": "1",
@@ -107,11 +109,12 @@ func TestScopeBind(t *testing.T) {
 
 	expect := ScopeBindParam{
 		A: "1",
-		B: "2",
-		C: "3",
-		D: "4",
+		B: 2,
+		C: 3,
+		D: 4,
 		E: "6",
 		F: "7",
+		G: true,
 	}
 
 	var p ScopeBindParam
