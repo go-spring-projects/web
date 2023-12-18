@@ -24,7 +24,7 @@ The `web` package aims to provide a simpler and more user-friendly development e
 
 * Automatically bind models based on `ContentType`.
 * Automatically output based on function return type.
-* binding from `path/header/cookie/form/body`.
+* Support binding value from `path/header/cookie/form/body`.
 * Support binding files for easier file uploads handling.
 * Support customizing global output formats and route-level custom output.
 * Support custom parameter validators.
