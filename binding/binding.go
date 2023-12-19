@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var ErrBinding = errors.New("binding failed")
@@ -50,6 +51,8 @@ type Request interface {
 	MultipartParams(maxMemory int64) (*multipart.Form, error)
 	RequestBody() io.Reader
 }
+
+type FieldConverter func(v reflect.Value, val string) error
 
 type BindScope int
 
@@ -75,6 +78,8 @@ var scopeGetters = map[BindScope]func(r Request, name string) (string, bool){
 	BindScopeCookie: Request.Cookie,
 }
 
+var fieldConverters = map[reflect.Type]FieldConverter{}
+
 // ValidateStruct validates a single struct.
 var validateStruct func(i interface{}) error
 
@@ -88,16 +93,19 @@ var bodyBinders = map[string]BodyBinder{
 	MIMETextXML:         BindXML,
 }
 
-func RegisterScopeTag(scope BindScope, tag string) {
-	scopeTags[scope] = tag
-}
-
+// RegisterBodyBinder register body binder.
 func RegisterBodyBinder(mime string, binder BodyBinder) {
 	bodyBinders[mime] = binder
 }
 
+// RegisterValidator register custom validator.
 func RegisterValidator(validator func(i interface{}) error) {
 	validateStruct = validator
+}
+
+// RegisterConverter register custom field type converter.
+func RegisterConverter(typ reflect.Type, converter FieldConverter) {
+	fieldConverters[typ] = converter
 }
 
 // Bind checks the Method and Content-Type to select a binding engine automatically,
@@ -172,6 +180,11 @@ func bindScopeField(scope BindScope, v reflect.Value, field reflect.StructField,
 }
 
 func bindData(v reflect.Value, val string) error {
+
+	if fn, ok := fieldConverters[v.Type()]; ok {
+		return fn(v, val)
+	}
+
 	switch v.Kind() {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		u, err := strconv.ParseUint(val, 0, 0)
@@ -207,4 +220,52 @@ func bindData(v reflect.Value, val string) error {
 	default:
 		return fmt.Errorf("unsupported binding type %q", v.Type().String())
 	}
+}
+
+func parseDuration(v reflect.Value, val string) error {
+	du, err := time.ParseDuration(val)
+	if nil != err {
+		return err
+	}
+
+	v.Set(reflect.ValueOf(du))
+	return nil
+}
+
+func parseTime(v reflect.Value, val string) error {
+	var layouts = []string{
+		time.Layout,
+		time.ANSIC,
+		time.UnixDate,
+		time.RubyDate,
+		time.RFC822,
+		time.RFC822Z,
+		time.RFC850,
+		time.RFC1123,
+		time.RFC1123Z,
+		time.RFC3339,
+		time.RFC3339Nano,
+		time.Kitchen,
+		time.Stamp,
+		time.StampMilli,
+		time.StampMicro,
+		time.StampNano,
+		time.DateTime,
+		time.DateOnly,
+		time.TimeOnly,
+	}
+
+	for _, layout := range layouts {
+		if t, err := time.ParseInLocation(layout, val, time.UTC); nil == err {
+			v.Set(reflect.ValueOf(t))
+			return nil
+		}
+	}
+
+	return fmt.Errorf("parse time.Time failed: %s", val)
+}
+
+func init() {
+	RegisterConverter(reflect.TypeOf(time.Duration(0)), parseDuration)
+	RegisterConverter(reflect.TypeOf(time.Time{}), parseTime)
 }

@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go-spring.dev/web/binding"
@@ -77,16 +78,20 @@ func (r *MockRequest) RequestBody() io.Reader {
 }
 
 type ScopeBindParam struct {
-	A string  `path:"a"`
-	B int     `path:"b"`
-	C uint    `path:"c" query:"c"`
-	D float32 `query:"d"`
-	E string  `query:"e" header:"e"`
-	F string  `cookie:"f"`
-	G bool    `query:"g"`
+	A string        `path:"a"`
+	B int           `path:"b"`
+	C uint          `path:"c" query:"c"`
+	D float32       `query:"d"`
+	E string        `query:"e" header:"e"`
+	F string        `cookie:"f"`
+	G bool          `query:"g"`
+	H time.Duration `query:"h"`
+	I time.Time     `query:"i"`
 }
 
 func TestScopeBind(t *testing.T) {
+
+	t1 := time.Date(2013, 23, 22, 20, 19, 18, 0, time.UTC)
 
 	ctx := &MockRequest{
 		headers: map[string]string{
@@ -97,6 +102,8 @@ func TestScopeBind(t *testing.T) {
 			"d": "4",
 			"e": "5",
 			"g": "true",
+			"h": "10m",
+			"i": t1.Format(time.DateTime),
 		},
 		pathParams: map[string]string{
 			"a": "1",
@@ -115,6 +122,8 @@ func TestScopeBind(t *testing.T) {
 		E: "6",
 		F: "7",
 		G: true,
+		H: 10 * time.Minute,
+		I: t1,
 	}
 
 	var p ScopeBindParam
