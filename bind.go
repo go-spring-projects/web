@@ -249,12 +249,12 @@ func JsonRender() RendererFunc {
 			}
 		}
 
-		type response struct {
+		type JsonResponse struct {
 			Code    int         `json:"code"`
 			Message string      `json:"message,omitempty"`
 			Data    interface{} `json:"data"`
 		}
 
-		ctx.JSON(http.StatusOK, response{Code: code, Message: message, Data: result})
+		_ = ctx.JSON(http.StatusOK, JsonResponse{Code: code, Message: message, Data: result})
 	}
 }

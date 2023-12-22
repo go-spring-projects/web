@@ -91,14 +91,12 @@ func (options Options) TlsConfig() *tls.Config {
 	}
 
 	return &tls.Config{
-		GetCertificate: options.GetCertificate,
+		GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			cert, err := tls.LoadX509KeyPair(options.CertFile, options.KeyFile)
+			if err != nil {
+				return nil, err
+			}
+			return &cert, nil
+		},
 	}
-}
-
-func (options Options) GetCertificate(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	cert, err := tls.LoadX509KeyPair(options.CertFile, options.KeyFile)
-	if err != nil {
-		return nil, err
-	}
-	return &cert, nil
 }

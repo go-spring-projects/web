@@ -30,13 +30,13 @@ type Middlewares []MiddlewareFunc
 // Handler builds and returns a http.Handler from the chain of middlewares,
 // with `h http.Handler` as the final handler.
 func (mws Middlewares) Handler(h http.Handler) http.Handler {
-	return &chainHandler{Endpoint: h, chain: mws.chain(h), Middlewares: mws}
+	return &ChainHandler{Endpoint: h, chain: mws.chain(h), Middlewares: mws}
 }
 
 // HandlerFunc builds and returns a http.Handler from the chain of middlewares,
 // with `h http.Handler` as the final handler.
 func (mws Middlewares) HandlerFunc(h http.HandlerFunc) http.Handler {
-	return &chainHandler{Endpoint: h, chain: mws.chain(h), Middlewares: mws}
+	return &ChainHandler{Endpoint: h, chain: mws.chain(h), Middlewares: mws}
 }
 
 // Build a http.Handler composed of an inline middlewares.
@@ -51,12 +51,16 @@ func (mws Middlewares) chain(handler http.Handler) http.Handler {
 	return handler
 }
 
-type chainHandler struct {
+type ChainHandler struct {
 	Endpoint    http.Handler
 	chain       http.Handler
 	Middlewares Middlewares
 }
 
-func (c *chainHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (c *ChainHandler) Unwrap() any {
+	return c.Endpoint
+}
+
+func (c *ChainHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.chain.ServeHTTP(w, r)
 }
