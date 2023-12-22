@@ -54,7 +54,7 @@ import (
 //		  http.ListenAndServe(":8080", router)
 //		}
 type Router interface {
-	// Handler dispatches the handler registered in the matched route.
+	Routes
 	http.Handler
 
 	// Use appends a MiddlewareFunc to the chain.

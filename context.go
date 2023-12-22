@@ -337,6 +337,14 @@ type RouteContext struct {
 	methodsAllowed   []methodTyp
 }
 
+// AllowedMethods report allowed http methods.
+func (c *RouteContext) AllowedMethods() (methods []string) {
+	for _, m := range c.methodsAllowed {
+		methods = append(methods, methodTypString(m))
+	}
+	return
+}
+
 // Reset context to initial state
 func (c *RouteContext) Reset() {
 	c.Routes = nil
