@@ -46,14 +46,13 @@ import (
 // It implements the http.Handler interface, so it can be registered to serve
 // requests:
 //
-//			var router = web.NewRouter()
-//
-//			func main() {
-//		     router.Get("/greeting", func(ctx context.Context) string {
-//		     	return "greeting!!!"
-//		     })
-//	      http.Handle("/", router)
-//			}
+//		func main() {
+//	   var router = web.NewRouter()
+//		  router.Get("/greeting", func(ctx context.Context) string {
+//		    return "greeting!!!"
+//		  })
+//		  http.ListenAndServe(":8080", router)
+//		}
 type Router interface {
 	// Handler dispatches the handler registered in the matched route.
 	http.Handler
@@ -157,6 +156,9 @@ func (rg *routerGroup) Use(mwf ...MiddlewareFunc) Router {
 
 // Renderer to be used Response renderer in default.
 func (rg *routerGroup) Renderer(renderer Renderer) Router {
+	if rg.handler != nil {
+		panic("renderer must be defined before routes registers")
+	}
 	rg.renderer = renderer
 	return rg
 }
