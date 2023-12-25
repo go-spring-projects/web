@@ -11,17 +11,13 @@ import (
 	"gopkg.in/validator.v2"
 )
 
+var router = web.NewRouter()
 var validatorInst = validator.NewValidator().WithTag("validate")
 
-func main() {
+func init() {
 	binding.RegisterValidator(func(i interface{}) error {
 		return validatorInst.Validate(i)
 	})
-
-	var router = web.NewRouter()
-	router.Post("/user/register", UserRegister)
-
-	http.ListenAndServe(":8080", router)
 }
 
 type UserRegisterModel struct {
@@ -32,6 +28,12 @@ type UserRegisterModel struct {
 	UserAgent string                `header:"User-Agent"`                      // user agent
 	Ad        string                `query:"ad"`                               // advertising ID
 	Token     string                `cookie:"token"`                           // token
+}
+
+func main() {
+	router.Post("/user/register", UserRegister)
+
+	http.ListenAndServe(":8080", router)
 }
 
 func UserRegister(ctx context.Context, req UserRegisterModel) string {

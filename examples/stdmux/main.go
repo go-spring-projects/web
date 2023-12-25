@@ -9,12 +9,6 @@ import (
 	"go-spring.dev/web"
 )
 
-func main() {
-	http.Handle("/user/register", web.Bind(UserRegister, web.JsonRender()))
-
-	http.ListenAndServe(":8080", nil)
-}
-
 type UserRegisterModel struct {
 	Username  string                `form:"username"`     // username
 	Password  string                `form:"password"`     // password
@@ -23,6 +17,12 @@ type UserRegisterModel struct {
 	UserAgent string                `header:"User-Agent"` // user agent
 	Ad        string                `query:"ad"`          // advertising ID
 	Token     string                `cookie:"token"`      // token
+}
+
+func main() {
+	http.Handle("/user/register", web.Bind(UserRegister, web.JsonRender()))
+
+	http.ListenAndServe(":8080", nil)
 }
 
 func UserRegister(ctx context.Context, req UserRegisterModel) string {

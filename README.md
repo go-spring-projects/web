@@ -24,24 +24,27 @@ The `web` package aims to provide a simpler and more user-friendly development e
 
 * Automatically bind models based on `ContentType`.
 * Automatically output based on function return type.
-* Support binding value from `path/header/cookie/form/body`.
+* Support binding value from `path/query/header/cookie/form/body`.
 * Support binding files for easier file uploads handling.
 * Support customizing global output formats and route-level custom output.
 * Support custom parameter validators.
 * Support handler converter, adding the above capabilities with just one line of code for all http servers based on the standard library solution.
 * Support for middlewares based on chain of responsibility.
 
+
 ## Router
 
 web router is based on a kind of [Patricia Radix trie](https://en.wikipedia.org/wiki/Radix_tree). The router is compatible with net/http.
 
-Router interface:
+<details>
+
+<summary>Router interface:</summary>
 
 ```go
 // Router registers routes to be matched and dispatches a handler.
 //
 type Router interface {
-	// Handler dispatches the handler registered in the matched route.
+	Routes
 	http.Handler
 
 	// Use appends a MiddlewareFunc to the chain.
@@ -97,9 +100,9 @@ type Router interface {
 	MethodNotAllowed(handler http.HandlerFunc)
 }
 ```
+</details>
 
-
-## Quick start
+## Getting Started
 
 ### HelloWorld
 
@@ -116,77 +119,70 @@ import (
 func main() {
 	var router = web.NewRouter()
 
-	router.Get("/greeting", func(ctx context.Context) string {
-		return "greeting!!!"
+	router.Get("/greeting", func(ctx context.Context, req struct {
+		Name string `query:"name"`
+	}) string {
+		return "Hello, " + req.Name
 	})
 
 	http.ListenAndServe(":8080", router)
 }
 ```
 
-### Adaptation standard library
+```
+$ curl -i -X GET 'http://127.0.0.1:8080/greeting?name=world'
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Mon, 25 Dec 2023 06:13:03 GMT
+Content-Length: 33
 
-Supported function forms to be converted to `http.HandlerFunc`：
-
-```go
-// Bind convert fn to HandlerFunc.
-//
-// func(ctx context.Context)
-//
-// func(ctx context.Context) R
-//
-// func(ctx context.Context) error
-//
-// func(ctx context.Context, req T) R
-//
-// func(ctx context.Context, req T) error
-//
-// func(ctx context.Context, req T) (R, error)
-//
-func Bind(fn interface{}, render Renderer) http.HandlerFunc
+{"code":0,"data":"Hello, world"}
 ```
 
-An example based std http server:
+### Custom Render
+
+Allows you to customize the renderer, using the default `JsonRender` if not specified.
 
 ```go
 package main
 
 import (
 	"context"
-	"log/slog"
-	"mime/multipart"
 	"net/http"
 
 	"go-spring.dev/web"
 )
 
 func main() {
-	http.Handle("/user/register", web.Bind(UserRegister, web.JsonRender()))
+	var router = web.NewRouter()
 
-	http.ListenAndServe(":8080", nil)
+	router.Renderer(web.RendererFunc(func(ctx *web.Context, err error, result interface{}) {
+		if nil != err {
+			ctx.String(500, "%v", err)
+		} else {
+			ctx.String(200, "%v", result)
+		}
+	}))
+
+	router.Get("/greeting", func(ctx context.Context, req struct {
+		Name string `query:"name"`
+	}) string {
+		return "Hello, " + req.Name
+	})
+
+	http.ListenAndServe(":8080", router)
+
+	/*
+        $ curl -i -X GET 'http://127.0.0.1:8080/greeting?name=world'
+        HTTP/1.1 200 OK
+        Content-Type: text/plain; charset=utf-8
+        Date: Mon, 25 Dec 2023 06:35:32 GMT
+        Content-Length: 12
+    
+        Hello, world
+	*/
 }
 
-type UserRegisterModel struct {
-	Username  string                `form:"username"`     // username
-	Password  string                `form:"password"`     // password
-	Avatar    *multipart.FileHeader `form:"avatar"`       // avatar
-	Captcha   string                `form:"captcha"`      // captcha
-	UserAgent string                `header:"User-Agent"` // user agent
-	Ad        string                `query:"ad"`          // advertising ID
-	Token     string                `cookie:"token"`      // token
-}
-
-func UserRegister(ctx context.Context, req UserRegisterModel) string {
-	slog.Info("user register",
-		slog.String("username", req.Username),
-		slog.String("password", req.Password),
-		slog.String("captcha", req.Captcha),
-		slog.String("userAgent", req.UserAgent),
-		slog.String("ad", req.Ad),
-		slog.String("token", req.Token),
-	)
-	return "success"
-}
 ```
 
 ### Custom validator
@@ -209,17 +205,13 @@ import (
 	"gopkg.in/validator.v2"
 )
 
+var router = web.NewRouter()
 var validatorInst = validator.NewValidator().WithTag("validate")
 
-func main() {
+func init() {
 	binding.RegisterValidator(func(i interface{}) error {
 		return validatorInst.Validate(i)
 	})
-
-	var router = web.NewRouter()
-	router.Post("/user/register", UserRegister)
-
-	http.ListenAndServe(":8080", router)
 }
 
 type UserRegisterModel struct {
@@ -230,6 +222,12 @@ type UserRegisterModel struct {
 	UserAgent string                `header:"User-Agent"`                      // user agent
 	Ad        string                `query:"ad"`                               // advertising ID
 	Token     string                `cookie:"token"`                           // token
+}
+
+func main() {
+	router.Post("/user/register", UserRegister)
+
+	http.ListenAndServe(":8080", router)
 }
 
 func UserRegister(ctx context.Context, req UserRegisterModel) string {
