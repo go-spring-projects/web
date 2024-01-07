@@ -88,19 +88,6 @@ func Bind(fn interface{}, render Renderer) http.HandlerFunc {
 		var returnValues []reflect.Value
 		var err error
 
-		defer func() {
-			if r := recover(); nil != r {
-				if e, ok := r.(error); ok {
-					err = fmt.Errorf("%s: %w", request.URL.Path, e)
-				} else {
-					err = fmt.Errorf("%s: %v", request.URL.Path, r)
-				}
-
-				// render error response
-				render.Render(webCtx, err, nil)
-			}
-		}()
-
 		ctxValue := reflect.ValueOf(ctx)
 
 		switch fnType.NumIn() {
