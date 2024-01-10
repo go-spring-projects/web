@@ -77,7 +77,13 @@ func (r *MockRequest) RequestBody() io.Reader {
 	return strings.NewReader(r.requestBody)
 }
 
+type NestParam struct {
+	A1 string `path:"a"`
+	B1 int    `path:"b"`
+}
+
 type ScopeBindParam struct {
+	NestParam
 	A string        `path:"a"`
 	B int           `path:"b"`
 	C uint          `path:"c" query:"c"`
@@ -115,15 +121,16 @@ func TestScopeBind(t *testing.T) {
 	}
 
 	expect := ScopeBindParam{
-		A: "1",
-		B: 2,
-		C: 3,
-		D: 4,
-		E: "6",
-		F: "7",
-		G: true,
-		H: 10 * time.Minute,
-		I: t1,
+		NestParam: NestParam{A1: "1", B1: 2},
+		A:         "1",
+		B:         2,
+		C:         3,
+		D:         4,
+		E:         "6",
+		F:         "7",
+		G:         true,
+		H:         10 * time.Minute,
+		I:         t1,
 	}
 
 	var p ScopeBindParam

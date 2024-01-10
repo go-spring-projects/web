@@ -157,6 +157,12 @@ func bindScope(i interface{}, r Request) error {
 	for j := 0; j < ev.NumField(); j++ {
 		fv := ev.Field(j)
 		ft := et.Field(j)
+		if ft.Anonymous {
+			if err := bindScope(fv.Addr().Interface(), r); nil != err {
+				return err
+			}
+			continue
+		}
 		for scope := BindScopeURI; scope < BindScopeBody; scope++ {
 			if err := bindScopeField(scope, fv, ft, r); err != nil {
 				return err
