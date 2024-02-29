@@ -12,6 +12,8 @@ import (
 func main() {
 	var router = web.NewRouter()
 
+	router.Use(web.Recovery())
+
 	// access log
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -50,6 +52,10 @@ func main() {
 				return nil
 			}
 			return web.Error(400, "login failed")
+		})
+
+		r.Get("/panic", func(ctx context.Context) {
+			panic("panic test")
 		})
 	})
 
