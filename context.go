@@ -333,8 +333,8 @@ type RouteContext struct {
 	RoutePattern  string
 	routePatterns []string
 
-	methodNotAllowed bool
 	methodsAllowed   []methodTyp
+	methodNotAllowed bool
 }
 
 // AllowedMethods report allowed http methods.

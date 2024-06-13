@@ -20,7 +20,7 @@ type UserRegisterModel struct {
 }
 
 func main() {
-	http.Handle("/user/register", web.Bind(UserRegister, web.JsonRender()))
+	http.Handle("POST /user/register", web.Bind(UserRegister, web.JsonRender()))
 
 	http.ListenAndServe(":8080", nil)
 }

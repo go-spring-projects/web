@@ -19,6 +19,7 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -255,6 +256,10 @@ func (rg *routerGroup) routeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Find the route
 	if _, _, h := rg.tree.FindRoute(ctx, method, routePath); h != nil {
+		// sets the path values in the Request value based on the provided request context.
+		setPathValue(ctx, r)
+
+		// serve http request.
 		h.ServeHTTP(w, r)
 		return
 	}
@@ -354,13 +359,29 @@ func (rg *routerGroup) handle(method methodTyp, pattern string, handler http.Han
 	return rg.tree.InsertRoute(method, pattern, handler)
 }
 
+func (rg *routerGroup) method(method, pattern string, handler http.Handler) {
+	if m, ok := methodMap[method]; ok {
+		rg.handle(m, pattern, handler)
+		return
+	}
+	panic(fmt.Errorf("%q http method is not supported", method))
+}
+
 // Handle registers a new route with a matcher for the URL pattern.
 func (rg *routerGroup) Handle(pattern string, handler http.Handler) {
+	if parts := strings.SplitN(pattern, " ", 2); 2 == len(parts) {
+		rg.method(parts[0], parts[1], handler)
+		return
+	}
 	rg.handle(mALL, pattern, handler)
 }
 
 // HandleFunc registers a new route with a matcher for the URL pattern.
 func (rg *routerGroup) HandleFunc(pattern string, handler http.HandlerFunc) {
+	if parts := strings.SplitN(pattern, " ", 2); 2 == len(parts) {
+		rg.method(parts[0], parts[1], handler)
+		return
+	}
 	rg.handle(mALL, pattern, handler)
 }
 
