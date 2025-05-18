@@ -351,7 +351,7 @@ func (n *node) setEndpoint(method methodTyp, handler http.Handler, pattern strin
 
 func (n *node) FindRoute(rctx *RouteContext, method methodTyp, path string) (*node, endpoints, http.Handler) {
 	// Reset the context routing pattern and params
-	rctx.RoutePattern = ""
+	rctx.routePattern = ""
 	rctx.routeParams.Keys = rctx.routeParams.Keys[:0]
 	rctx.routeParams.Values = rctx.routeParams.Values[:0]
 
@@ -367,8 +367,8 @@ func (n *node) FindRoute(rctx *RouteContext, method methodTyp, path string) (*no
 
 	// Record the routing pattern in the request lifecycle
 	if rn.endpoints[method].pattern != "" {
-		rctx.RoutePattern = rn.endpoints[method].pattern
-		rctx.routePatterns = append(rctx.routePatterns, rctx.RoutePattern)
+		rctx.routePattern = rn.endpoints[method].pattern
+		rctx.routePatterns = append(rctx.routePatterns, rctx.routePattern)
 	}
 
 	return rn, rn.endpoints, rn.endpoints[method].handler

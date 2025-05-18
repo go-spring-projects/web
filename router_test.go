@@ -14,14 +14,6 @@ import (
 	"time"
 )
 
-func URLParam(r *http.Request, name string) string {
-	if ctx := FromRouteContext(r.Context()); nil != ctx {
-		v, _ := ctx.URLParams.Get(name)
-		return v
-	}
-	return ""
-}
-
 func TestMuxBasic(t *testing.T) {
 	var count uint64
 	countermw := func(next http.Handler) http.Handler {

@@ -17,11 +17,7 @@
 package web
 
 import (
-	"fmt"
-	"io"
 	"net/http"
-	"os"
-	"runtime/debug"
 )
 
 // MiddlewareFunc is a function which receives an http.Handler and returns another http.Handler.
@@ -69,33 +65,4 @@ func (c *ChainHandler) Unwrap() any {
 
 func (c *ChainHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.chain.ServeHTTP(w, r)
-}
-
-// Recovery returns a middleware that recovers from any panics and writes a 500 if there was one.
-func Recovery() MiddlewareFunc {
-	return RecoveryWith(os.Stderr)
-}
-
-// RecoveryWith returns a middleware for a given writer that recovers from any panics and writes a 500 if there was one.
-func RecoveryWith(panicOut io.Writer) MiddlewareFunc {
-	return func(next http.Handler) http.Handler {
-
-		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-
-			defer func() {
-				if rv := recover(); nil != rv {
-
-					if nil != panicOut {
-						fmt.Fprintf(panicOut, "[recovered]: %v\n%s", rv, debug.Stack())
-					}
-
-					if request.Header.Get("Connection") != "Upgrade" {
-						writer.WriteHeader(http.StatusInternalServerError)
-					}
-				}
-			}()
-
-			next.ServeHTTP(writer, request)
-		})
-	}
 }

@@ -32,6 +32,16 @@ import (
 	"go-spring.dev/web/render"
 )
 
+// URLParam returns the corresponding URL parameter value from the request
+// routing context.
+func URLParam(r *http.Request, name string) string {
+	if ctx := FromRouteContext(r.Context()); nil != ctx {
+		v, _ := ctx.URLParams.Get(name)
+		return v
+	}
+	return ""
+}
+
 type contextKey struct{}
 
 func WithContext(parent context.Context, ctx *Context) context.Context {
@@ -330,7 +340,7 @@ type RouteContext struct {
 	// or `RoutePath` of the current sub-router. This value will update
 	// during the lifecycle of a request passing through a stack of
 	// sub-routers.
-	RoutePattern  string
+	routePattern  string
 	routePatterns []string
 
 	methodsAllowed   []methodTyp
@@ -345,12 +355,46 @@ func (c *RouteContext) AllowedMethods() (methods []string) {
 	return
 }
 
+// URLParam returns the corresponding URL parameter value from the request
+// routing context.
+func (c *RouteContext) URLParam(key string) string {
+	value, _ := c.URLParams.Get(key)
+	return value
+}
+
+// RoutePattern builds the routing pattern string for the particular
+// request, at the particular point during routing. This means, the value
+// will change throughout the execution of a request in a router. That is
+// why it's advised to only use this value after calling the next handler.
+//
+// For example,
+//
+//	func Instrument(next http.Handler) http.Handler {
+//		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//			next.ServeHTTP(w, r)
+//			routePattern := chi.RouteContext(r.Context()).RoutePattern()
+//			measure(w, r, routePattern)
+//		})
+//	}
+func (c *RouteContext) RoutePattern() string {
+	if c == nil {
+		return ""
+	}
+	routePattern := strings.Join(c.routePatterns, "")
+	routePattern = replaceWildcards(routePattern)
+	if routePattern != "/" {
+		routePattern = strings.TrimSuffix(routePattern, "//")
+		routePattern = strings.TrimSuffix(routePattern, "/")
+	}
+	return routePattern
+}
+
 // Reset context to initial state
 func (c *RouteContext) Reset() {
 	c.Routes = nil
 	c.RoutePath = ""
 	c.RouteMethod = ""
-	c.RoutePattern = ""
+	c.routePattern = ""
 	c.routePatterns = c.routePatterns[:0]
 	c.URLParams.Keys = c.URLParams.Keys[:0]
 	c.URLParams.Values = c.URLParams.Values[:0]
@@ -358,6 +402,15 @@ func (c *RouteContext) Reset() {
 	c.routeParams.Values = c.routeParams.Values[:0]
 	c.methodNotAllowed = false
 	c.methodsAllowed = c.methodsAllowed[:0]
+}
+
+// replaceWildcards takes a route pattern and recursively replaces all
+// occurrences of "/*/" to "/".
+func replaceWildcards(p string) string {
+	if strings.Contains(p, "/*/") {
+		return replaceWildcards(strings.Replace(p, "/*/", "/", -1))
+	}
+	return p
 }
 
 // RouteParams is a structure to track URL routing parameters efficiently.

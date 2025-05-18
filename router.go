@@ -67,6 +67,9 @@ type Router interface {
 	// Group creates a new router group.
 	Group(pattern string, fn ...func(r Router)) Router
 
+	// Mount attaches another http.Handler along ./pattern/*
+	Mount(pattern string, h http.Handler)
+
 	// Handle registers a new route with a matcher for the URL pattern.
 	Handle(pattern string, handler http.Handler)
 
@@ -122,6 +125,10 @@ type Routes interface {
 	// the method/path - similar to routing a http request, but without
 	// executing the handler thereafter.
 	Match(ctx *RouteContext, method, path string) bool
+
+	// Find searches the routing tree for the pattern that matches
+	// the method/path.
+	Find(ctx *RouteContext, method, path string) string
 }
 
 // NewRouter returns a new router instance.
@@ -504,4 +511,33 @@ func (rg *routerGroup) Match(ctx *RouteContext, method, path string) bool {
 	}
 
 	return h != nil
+}
+
+// Find searches the routing tree for the pattern that matches the method/path.
+func (rg *routerGroup) Find(ctx *RouteContext, method, path string) string {
+	m, ok := methodMap[method]
+	if !ok {
+		return ""
+	}
+
+	node, _, _ := rg.tree.FindRoute(ctx, m, path)
+	pattern := ctx.routePattern
+
+	if node != nil {
+		if node.subroutes == nil {
+			e := node.endpoints[m]
+			return e.pattern
+		}
+
+		ctx.RoutePath = rg.nextRoutePath(ctx)
+		subPattern := node.subroutes.Find(ctx, method, ctx.RoutePath)
+		if subPattern == "" {
+			return ""
+		}
+
+		pattern = strings.TrimSuffix(pattern, "/*")
+		pattern += subPattern
+	}
+
+	return pattern
 }

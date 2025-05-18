@@ -65,6 +65,8 @@ func init() {
 func main() {
 	// https://petstore.swagger.io/
 
+	router.Mount("/debug", web.Profiler())
+
 	// register pet handler
 	api.Register(router)
 
