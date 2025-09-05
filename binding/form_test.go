@@ -46,6 +46,8 @@ type FormBindParam struct {
 func TestBindForm(t *testing.T) {
 
 	ctx := &MockRequest{
+		method:      "POST",
+		contentType: "application/x-www-form-urlencoded",
 		formParams: url.Values{
 			"a": {"1"},
 			"b": {"2", "3"},
@@ -148,6 +150,10 @@ func TestBindMultipartForm(t *testing.T) {
 
 type testRequest struct {
 	*http.Request
+}
+
+func (r testRequest) Method() string {
+	return r.Request.Method
 }
 
 func (r testRequest) ContentType() string {

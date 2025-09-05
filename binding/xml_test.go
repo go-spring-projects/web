@@ -48,6 +48,7 @@ func TestBindXML(t *testing.T) {
 	assert.Nil(t, err)
 
 	r := &MockRequest{
+		method:      "POST",
 		contentType: binding.MIMEApplicationXML,
 		requestBody: string(data),
 	}

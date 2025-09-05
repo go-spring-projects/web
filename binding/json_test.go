@@ -48,6 +48,7 @@ func TestBindJSON(t *testing.T) {
 	}
 
 	ctx := &MockRequest{
+		method:      "POST",
 		contentType: binding.MIMEApplicationJSON,
 		requestBody: string(data),
 	}

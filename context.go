@@ -74,6 +74,11 @@ func (c *Context) Context() context.Context {
 	return c.Request.Context()
 }
 
+// Method returns the request method.
+func (c *Context) Method() string {
+	return c.Request.Method
+}
+
 // ContentType returns the request header `Content-Type`.
 func (c *Context) ContentType() string {
 	contentType := c.Request.Header.Get("Content-Type")

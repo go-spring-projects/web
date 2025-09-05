@@ -30,6 +30,7 @@ import (
 )
 
 type MockRequest struct {
+	method      string
 	contentType string
 	headers     map[string]string
 	queryParams map[string]string
@@ -37,6 +38,10 @@ type MockRequest struct {
 	cookies     map[string]string
 	formParams  url.Values
 	requestBody string
+}
+
+func (r *MockRequest) Method() string {
+	return r.method
 }
 
 var _ binding.Request = &MockRequest{}
@@ -100,6 +105,7 @@ func TestScopeBind(t *testing.T) {
 	t1 := time.Date(2013, 23, 22, 20, 19, 18, 0, time.UTC)
 
 	ctx := &MockRequest{
+		method: "GET",
 		headers: map[string]string{
 			"e": "6",
 		},

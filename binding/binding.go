@@ -23,15 +23,16 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 )
 
 var ErrBinding = errors.New("binding failed")
 var ErrValidate = errors.New("validate failed")
+var ErrNoContentType = errors.New("missing content type")
 
 const (
 	MIMEApplicationJSON = "application/json"
@@ -39,9 +40,11 @@ const (
 	MIMETextXML         = "text/xml"
 	MIMEApplicationForm = "application/x-www-form-urlencoded"
 	MIMEMultipartForm   = "multipart/form-data"
+	MIMEMissing         = ""
 )
 
 type Request interface {
+	Method() string
 	ContentType() string
 	Header(key string) (string, bool)
 	Cookie(name string) (string, bool)
@@ -85,17 +88,29 @@ var validateStruct func(i interface{}) error
 
 type BodyBinder func(i interface{}, r Request) error
 
-var bodyBinders = map[string]BodyBinder{
-	MIMEApplicationForm: BindForm,
-	MIMEMultipartForm:   BindMultipartForm,
-	MIMEApplicationJSON: BindJSON,
-	MIMEApplicationXML:  BindXML,
-	MIMETextXML:         BindXML,
+type bodyBinderOptions struct {
+	binder  BodyBinder
+	methods []string
+}
+
+var defaultBodyMethods = []string{http.MethodPost, http.MethodPut, http.MethodPatch}
+
+var bodyBinders = map[string]bodyBinderOptions{
+	MIMEApplicationForm: {BindForm, defaultBodyMethods},
+	MIMEMultipartForm:   {BindMultipartForm, defaultBodyMethods},
+	MIMEApplicationJSON: {BindJSON, defaultBodyMethods},
+	MIMEApplicationXML:  {BindXML, defaultBodyMethods},
+	MIMETextXML:         {BindXML, defaultBodyMethods},
+	MIMEMissing:         {noContentType, defaultBodyMethods},
+}
+
+func noContentType(i interface{}, r Request) error {
+	return ErrNoContentType
 }
 
 // RegisterBodyBinder register body binder.
-func RegisterBodyBinder(mime string, binder BodyBinder) {
-	bodyBinders[mime] = binder
+func RegisterBodyBinder(mime string, binder BodyBinder, enableMethods ...string) {
+	bodyBinders[mime] = bodyBinderOptions{binder, enableMethods}
 }
 
 // RegisterValidator register custom validator.
@@ -130,16 +145,33 @@ func Bind(i interface{}, r Request) error {
 	return nil
 }
 
-func bindBody(i interface{}, r Request) error {
-	mediaType, _, err := mime.ParseMediaType(r.ContentType())
-	if nil != err && !strings.Contains(err.Error(), "mime: no media type") {
-		return err
+func contains(methods []string, method string) bool {
+	for _, m := range methods {
+		if m == method {
+			return true
+		}
 	}
-	binder, ok := bodyBinders[mediaType]
-	if !ok {
-		binder = bodyBinders[MIMEApplicationForm]
+	return false
+}
+
+func bindBody(i interface{}, r Request) (err error) {
+
+	var mediaType = MIMEMissing
+
+	// parse ContentType from http request.
+	if contentType := r.ContentType(); contentType != "" {
+		if mediaType, _, err = mime.ParseMediaType(contentType); nil != err {
+			return err
+		}
 	}
-	return binder(i, r)
+
+	// check and bind body.
+	if opts, ok := bodyBinders[mediaType]; ok && (len(opts.methods) == 0 || contains(opts.methods, r.Method())) {
+		return opts.binder(i, r)
+	}
+
+	// ignore unknown mine-type or mismatch methods.
+	return nil
 }
 
 func bindScope(i interface{}, r Request) error {
