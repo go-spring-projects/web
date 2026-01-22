@@ -36,3 +36,15 @@ func TestHTMLRenderer(t *testing.T) {
 	assert.Equal(t, "text/html; charset=utf-8", htmlRender.ContentType())
 	assert.Equal(t, "Hello asdklajhdasdd", w.Body.String())
 }
+
+func TestHTMLRenderer_NoName(t *testing.T) {
+	w := httptest.NewRecorder()
+	templ := template.Must(template.New("").Parse(`Hello {{.name}}`))
+
+	htmlRender := HTMLRenderer{Template: templ, Name: "", Data: map[string]interface{}{"name": "world"}}
+	err := htmlRender.Render(w)
+
+	assert.Nil(t, err)
+	assert.Equal(t, "text/html; charset=utf-8", htmlRender.ContentType())
+	assert.Equal(t, "Hello world", w.Body.String())
+}

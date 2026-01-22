@@ -27,7 +27,9 @@ import (
 	"net/url"
 	"strings"
 	"unicode"
+	"unsafe"
 
+	"html/template"
 	"go-spring.dev/web/binding"
 	"go-spring.dev/web/render"
 )
@@ -267,6 +269,38 @@ func (c *Context) IndentedXML(code int, obj interface{}) error {
 	return c.Render(code, render.XmlRenderer{Data: obj, Indent: "  "})
 }
 
+// unsafeStringToBytes converts a string to []byte without copying.
+// The returned byte slice must not be modified.
+func unsafeStringToBytes(s string) []byte {
+	return unsafe.Slice(unsafe.StringData(s), len(s))
+}
+
+// htmlStringRenderer renders HTML strings without copying.
+type htmlStringRenderer struct {
+	html string
+}
+
+func (r htmlStringRenderer) ContentType() string {
+	return "text/html; charset=utf-8"
+}
+
+func (r htmlStringRenderer) Render(writer http.ResponseWriter) error {
+	_, err := writer.Write(unsafeStringToBytes(r.html))
+	return err
+}
+
+// HTML writes the given HTML string into the response body.
+// It also sets the Content-Type as "text/html; charset=utf-8".
+func (c *Context) HTML(code int, html string) error {
+	return c.Render(code, htmlStringRenderer{html: html})
+}
+
+// HTMLTemplate renders an HTML template with the given data.
+// It also sets the Content-Type as "text/html; charset=utf-8".
+func (c *Context) HTMLTemplate(code int, tmpl *template.Template, name string, data interface{}) error {
+	return c.Render(code, render.HTMLRenderer{Template: tmpl, Name: name, Data: data})
+}
+
 // File writes the specified file into the body stream in an efficient way.
 func (c *Context) File(filepath string) {
 	http.ServeFile(c.Writer, c.Request, filepath)
@@ -292,15 +326,12 @@ func (c *Context) RemoteIP() string {
 	return ip
 }
 
-// ClientIP implements one best effort algorithm to return the real client IP.
-// It calls c.RemoteIP() under the hood, to check if the remote IP is a trusted proxy or not.
-// If it is it will then try to parse the headers defined in RemoteIPHeaders (defaulting to [X-Forwarded-For, X-Real-Ip]).
-// If the headers are not syntactically valid OR the remote IP does not correspond to a trusted proxy,
-// the remote IP (coming from Request.RemoteAddr) is returned.
+// ClientIP returns the client IP address from the request.
+// It first checks the X-Forwarded-For and X-Real-Ip headers, returning the first value found.
+// If neither header is present or contains a valid IP, it returns the remote IP from Request.RemoteAddr.
+// Note: This method does not validate if the request comes from a trusted proxy.
+// For security, ensure your application is behind a trusted proxy that sets these headers appropriately.
 func (c *Context) ClientIP() string {
-	// It also checks if the remoteIP is a trusted proxy or not.
-	// In order to perform this validation, it will see if the IP is contained within at least one of the CIDR blocks
-	// defined by Engine.SetTrustedProxies()
 	remoteIP := net.ParseIP(c.RemoteIP())
 	if remoteIP == nil {
 		return ""
@@ -312,6 +343,13 @@ func (c *Context) ClientIP() string {
 		}
 	}
 	return remoteIP.String()
+}
+
+// SSE creates a new Server-Sent Events sender for streaming events to the client.
+// It sets the required HTTP headers for SSE and returns an SSESender interface.
+// If the underlying http.ResponseWriter does not support flushing, an error is returned.
+func (c *Context) SSE() (SSESender, error) {
+	return NewSSE(c.Writer)
 }
 
 type routeContextKey struct{}

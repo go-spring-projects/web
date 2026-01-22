@@ -716,6 +716,9 @@ func patNextSegment(pattern string) (nodeTyp, string, string, byte, int, int) {
 			rexpat = key[idx+1:]
 			key = key[:idx]
 		}
+		if key == "" {
+			panic("route parameter name cannot be empty")
+		}
 
 		if len(rexpat) > 0 {
 			if rexpat[0] != '^' {
@@ -724,6 +727,14 @@ func patNextSegment(pattern string) (nodeTyp, string, string, byte, int, int) {
 			if rexpat[len(rexpat)-1] != '$' {
 				rexpat += "$"
 			}
+		}
+
+		// Validate that tail is not '{' or '*', which would indicate missing delimiter
+		if tail == '{' {
+			panic("route parameter missing delimiter: two consecutive parameters '{...}{...}' are not allowed")
+		}
+		if tail == '*' {
+			panic("route parameter cannot be followed by wildcard '*', use '{param}' instead")
 		}
 
 		return nt, key, rexpat, tail, ps, pe

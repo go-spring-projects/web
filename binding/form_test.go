@@ -215,3 +215,326 @@ func (r testRequest) MultipartParams(maxMemory int64) (*multipart.Form, error) {
 func (r testRequest) RequestBody() io.Reader {
 	return r.Request.Body
 }
+
+func TestBindFormErrors(t *testing.T) {
+	// Test BindForm with non-pointer (should return nil)
+	type FormStruct struct {
+		Name string `form:"name"`
+	}
+
+	ctx := &MockRequest{
+		method:      "POST",
+		contentType: "application/x-www-form-urlencoded",
+		formParams: url.Values{"name": []string{"test"}},
+	}
+
+	var fs FormStruct
+	// Directly test BindForm with non-pointer
+	err := binding.BindForm(fs, ctx)
+	assert.Nil(t, err, "BindForm should return nil for non-pointer")
+
+	// Test with non-struct pointer
+	var i int
+	err = binding.BindForm(&i, ctx)
+	assert.Nil(t, err, "BindForm should return nil for non-struct pointer")
+
+	// Test with pointer to slice
+	var s []string
+	err = binding.BindForm(&s, ctx)
+	assert.Nil(t, err, "BindForm should return nil for pointer to slice")
+
+	// Test with unexported field (should be skipped)
+	type UnexportedForm struct {
+		name string `form:"name"` // unexported
+		Age  int    `form:"age"`
+	}
+
+	ctx.formParams = url.Values{
+		"name": []string{"test"},
+		"age":  []string{"30"},
+	}
+
+	var uf UnexportedForm
+	err = binding.BindForm(&uf, ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, 30, uf.Age) // Age is exported and should be bound
+	// name field is unexported and won't be bound
+
+	// Test with anonymous non-struct field (should be skipped)
+	type AnonymousNonStruct struct {
+		FormBindParamCommon
+		Extra string `form:"extra"`
+	}
+
+	// This should work since FormBindParamCommon is a struct
+	ctx.formParams = url.Values{
+		"a": []string{"1"},
+		"extra": []string{"test"},
+	}
+
+	var ans AnonymousNonStruct
+	err = binding.BindForm(&ans, ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, "1", ans.A)
+}
+
+func TestBindMultipartFormErrors(t *testing.T) {
+	// Test BindMultipartForm with non-pointer
+	type MultipartStruct struct {
+		File *multipart.FileHeader `form:"file"`
+	}
+
+	ctx := &MockRequest{
+		method:      "POST",
+		contentType: "multipart/form-data",
+		formParams:  url.Values{},
+	}
+
+	var ms MultipartStruct
+	err := binding.BindMultipartForm(ms, ctx)
+	assert.Error(t, err, "BindMultipartForm should return error from MultipartParams even for non-pointer")
+	assert.Contains(t, err.Error(), "not impl")
+
+	// Test with non-struct pointer
+	var i int
+	err = binding.BindMultipartForm(&i, ctx)
+	assert.Error(t, err, "BindMultipartForm should return error from MultipartParams for non-struct pointer")
+	assert.Contains(t, err.Error(), "not impl")
+
+	// Test with struct pointer (same error from MockRequest)
+	err = binding.BindMultipartForm(&ms, ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not impl")
+}
+
+func TestBindFormStructEdgeCases(t *testing.T) {
+	// Test with field without form tag (should be skipped)
+	type NoTagStruct struct {
+		Name string
+		Age  int `form:"age"`
+	}
+
+	ctx := &MockRequest{
+		method:      "POST",
+		contentType: "application/x-www-form-urlencoded",
+		formParams: url.Values{
+			"Name": []string{"John"}, // No tag, won't bind
+			"age":  []string{"30"},
+		},
+	}
+
+	var nts NoTagStruct
+	err := binding.BindForm(&nts, ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, "", nts.Name) // Should remain empty
+	assert.Equal(t, 30, nts.Age)
+
+	// Test with empty values (should be skipped)
+	type EmptyValuesStruct struct {
+		Name string `form:"name"`
+	}
+
+	ctx.formParams = url.Values{
+		"name": []string{}, // Empty slice
+	}
+
+	var evs EmptyValuesStruct
+	err = binding.BindForm(&evs, ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, "", evs.Name)
+}
+
+func TestBindMultipartFormFiles(t *testing.T) {
+	// Test with single file (non-slice)
+	// This requires creating a real multipart request
+	buf := new(bytes.Buffer)
+	mw := multipart.NewWriter(buf)
+
+	w, err := mw.CreateFormFile("singlefile", "test.txt")
+	assert.NoError(t, err)
+	_, err = w.Write([]byte("test content"))
+	assert.NoError(t, err)
+
+	mw.Close()
+
+	request, err := http.NewRequest("POST", "/", buf)
+	assert.NoError(t, err)
+	request.Header.Set("Content-Type", mw.FormDataContentType())
+
+	var params struct {
+		SingleFile *multipart.FileHeader `form:"singlefile"`
+	}
+
+	err = binding.BindMultipartForm(&params, testRequest{request})
+	assert.NoError(t, err)
+	assert.NotNil(t, params.SingleFile)
+	assert.Equal(t, "test.txt", params.SingleFile.Filename)
+}
+
+func TestBindMultipartFormStructEdgeCases(t *testing.T) {
+	// Test with anonymous non-struct field
+	type AnonymousNonStruct struct {
+		FormBindParamCommon
+		Extra string `form:"extra"`
+	}
+
+	// Create multipart request with form fields
+	buf := new(bytes.Buffer)
+	mw := multipart.NewWriter(buf)
+
+	// Add form field
+	a, err := mw.CreateFormField("a")
+	assert.NoError(t, err)
+	_, err = a.Write([]byte("111"))
+	assert.NoError(t, err)
+
+	// Add extra field
+	extra, err := mw.CreateFormField("extra")
+	assert.NoError(t, err)
+	_, err = extra.Write([]byte("test"))
+	assert.NoError(t, err)
+
+	mw.Close()
+
+	request, err := http.NewRequest("POST", "/", buf)
+	assert.NoError(t, err)
+	request.Header.Set("Content-Type", mw.FormDataContentType())
+
+	var params AnonymousNonStruct
+	err = binding.BindMultipartForm(&params, testRequest{request})
+	assert.NoError(t, err)
+	assert.Equal(t, "111", params.A)
+	assert.Nil(t, params.B) // B should be nil since no value provided
+	assert.Equal(t, "test", params.Extra)
+
+	// Test with field without form tag
+	type NoTagStruct struct {
+		Name string
+		Age  int `form:"age"`
+	}
+
+	buf2 := new(bytes.Buffer)
+	mw2 := multipart.NewWriter(buf2)
+
+	ageField, err := mw2.CreateFormField("age")
+	assert.NoError(t, err)
+	_, err = ageField.Write([]byte("30"))
+	assert.NoError(t, err)
+
+	mw2.Close()
+
+	request2, err := http.NewRequest("POST", "/", buf2)
+	assert.NoError(t, err)
+	request2.Header.Set("Content-Type", mw2.FormDataContentType())
+
+	var params2 NoTagStruct
+	err = binding.BindMultipartForm(&params2, testRequest{request2})
+	assert.NoError(t, err)
+	assert.Equal(t, 30, params2.Age)
+	assert.Equal(t, "", params2.Name) // Name should remain empty (no form tag)
+
+	// Test with unexported field (should be skipped)
+	type UnexportedStruct struct {
+		name string `form:"name"` // unexported
+		Age  int    `form:"age"`
+	}
+
+	buf3 := new(bytes.Buffer)
+	mw3 := multipart.NewWriter(buf3)
+
+	ageField3, err := mw3.CreateFormField("age")
+	assert.NoError(t, err)
+	_, err = ageField3.Write([]byte("25"))
+	assert.NoError(t, err)
+
+	nameField, err := mw3.CreateFormField("name")
+	assert.NoError(t, err)
+	_, err = nameField.Write([]byte("john"))
+	assert.NoError(t, err)
+
+	mw3.Close()
+
+	request3, err := http.NewRequest("POST", "/", buf3)
+	assert.NoError(t, err)
+	request3.Header.Set("Content-Type", mw3.FormDataContentType())
+
+	var params3 UnexportedStruct
+	err = binding.BindMultipartForm(&params3, testRequest{request3})
+	assert.NoError(t, err)
+	assert.Equal(t, 25, params3.Age) // Age should be bound
+	// name is unexported, can't check it directly
+
+	// Test file field without files (should be skipped)
+	type FileStruct struct {
+		File *multipart.FileHeader `form:"file"`
+		Text string                `form:"text"`
+	}
+
+	buf4 := new(bytes.Buffer)
+	mw4 := multipart.NewWriter(buf4)
+
+	textField, err := mw4.CreateFormField("text")
+	assert.NoError(t, err)
+	_, err = textField.Write([]byte("hello"))
+	assert.NoError(t, err)
+
+	// No file field added
+	mw4.Close()
+
+	request4, err := http.NewRequest("POST", "/", buf4)
+	assert.NoError(t, err)
+	request4.Header.Set("Content-Type", mw4.FormDataContentType())
+
+	var params4 FileStruct
+	err = binding.BindMultipartForm(&params4, testRequest{request4})
+	assert.NoError(t, err)
+	assert.Equal(t, "hello", params4.Text)
+	assert.Nil(t, params4.File) // File should be nil since no file was uploaded
+
+	// Test non-file field without values (should be skipped)
+	type NoValuesStruct struct {
+		Text string `form:"text"`
+	}
+
+	buf5 := new(bytes.Buffer)
+	mw5 := multipart.NewWriter(buf5)
+
+	// Don't add any form fields
+	mw5.Close()
+
+	request5, err := http.NewRequest("POST", "/", buf5)
+	assert.NoError(t, err)
+	request5.Header.Set("Content-Type", mw5.FormDataContentType())
+
+	var params5 NoValuesStruct
+	err = binding.BindMultipartForm(&params5, testRequest{request5})
+	assert.NoError(t, err)
+	assert.Equal(t, "", params5.Text) // Text should remain empty
+
+	// Test with anonymous non-struct field (should be skipped)
+	type MyInt int
+	type AnonymousNonStructField struct {
+		MyInt           // anonymous but not a struct
+		Value  string   `form:"value"`
+	}
+
+	buf6 := new(bytes.Buffer)
+	mw6 := multipart.NewWriter(buf6)
+
+	valueField, err := mw6.CreateFormField("value")
+	assert.NoError(t, err)
+	_, err = valueField.Write([]byte("test"))
+	assert.NoError(t, err)
+
+	mw6.Close()
+
+	request6, err := http.NewRequest("POST", "/", buf6)
+	assert.NoError(t, err)
+	request6.Header.Set("Content-Type", mw6.FormDataContentType())
+
+	var params6 AnonymousNonStructField
+	err = binding.BindMultipartForm(&params6, testRequest{request6})
+	assert.NoError(t, err)
+	assert.Equal(t, "test", params6.Value)
+	// MyInt should remain zero value since it's not a struct
+}

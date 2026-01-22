@@ -61,3 +61,22 @@ func TestXmlRenderer(t *testing.T) {
 	assert.Equal(t, "application/xml; charset=utf-8", render.ContentType())
 	assert.Equal(t, "<map><foo>bar</foo></map>", w.Body.String())
 }
+
+func TestXmlRenderer_Indented(t *testing.T) {
+	w := httptest.NewRecorder()
+	data := xmlmap{
+		"foo": "bar",
+		"num": 42,
+	}
+
+	render := XmlRenderer{Data: data, Prefix: "", Indent: "  "}
+	err := render.Render(w)
+
+	assert.Nil(t, err)
+	assert.Equal(t, "application/xml; charset=utf-8", render.ContentType())
+	expected := `<map>
+  <foo>bar</foo>
+  <num>42</num>
+</map>`
+	assert.Equal(t, expected, w.Body.String())
+}

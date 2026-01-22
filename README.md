@@ -12,25 +12,109 @@
 [9]: https://codecov.io/gh/go-spring-projects/web/graph/badge.svg?token=29W9JV6BUN
 [10]: https://codecov.io/gh/go-spring-projects/web
 
-The `web` package aims to provide a simpler and more user-friendly development experience.
+**go-spring/web** is a lightweight, high-performance Go web framework designed to provide a simpler and more productive development experience. It combines the power of automatic request/response handling with the flexibility of Go's standard library.
 
-*Note: This package does not depend on the go-spring*
+### Why go-spring/web?
+- **🚀 Zero Boilerplate**: Automatic binding and rendering eliminate repetitive code
+- **🔧 Standard Library Compatible**: Works seamlessly with existing `net/http` middleware and tools
+- **🎯 Developer Friendly**: Intuitive API with smart defaults and sensible conventions
+- **⚡ High Performance**: Built on a Patricia Radix trie router for fast route matching
+
+*Note: This package is part of the go-spring ecosystem but can be used independently.*
 
 ## Install
 
 `go get go-spring.dev/web@latest`
 
-## Features:
+## Features
 
-* Automatically bind models based on `ContentType`.
-* Automatically output based on function return type.
-* Support binding value from `path/query/header/cookie/form/body`.
-* Support binding files for easier file uploads handling.
-* Support customizing global output formats and route-level custom output.
-* Support custom parameter validators.
-* Support handler converter, adding the above capabilities with just one line of code for all http servers based on the standard library solution.
-* Support for middlewares based on chain of responsibility.
+### 🚀 Smart Binding & Rendering
+- **Automatic Request Binding**: Automatically binds request data to structs based on `Content-Type` (JSON, XML, Form, Multipart)
+- **Flexible Handler Signatures**: Supports multiple handler function signatures for different use cases
+- **Intelligent Response Rendering**: Automatically renders responses based on return type (JSON, XML, HTML, Text, Binary)
+- **Unified Parameter Access**: Bind values from `path`, `query`, `header`, `cookie`, `form`, and `body` with struct tags
 
+### 🛠️ Advanced Functionality
+- **File Upload Handling**: Simplified file upload processing with `*multipart.FileHeader` binding
+- **Custom Validators**: Register custom validation functions with global or route-level validation
+- **Middleware System**: Chain-of-responsibility middleware system compatible with standard `http.Handler`
+- **Route Groups**: Organize routes with nested groups and group-level middleware
+- **High-Performance Router**: Patricia Radix trie router with support for static, parameter, regex, and wildcard routes
+
+### 🔌 Extensibility & Compatibility
+- **Custom Renderers**: Customize global or route-specific response formats
+- **Built-in Middlewares**: Includes `NoCache`, `Recovery`, `Profiler`, and more
+- **SSE Support**: Full Server-Sent Events implementation with `web.NewSSE()`
+- **WebSocket Integration**: Easy WebSocket handler integration
+- **Standard Library Compatibility**: Works seamlessly with `net/http` and existing middleware
+
+## Quick Start
+
+### Hello World Example
+
+```go
+package main
+
+import (
+	"context"
+	"net/http"
+
+	"go-spring.dev/web"
+)
+
+func main() {
+	router := web.NewRouter()
+
+	// Simple GET handler with query parameter binding
+	router.Get("/greeting", func(ctx context.Context, req struct {
+		Name string `query:"name"`
+	}) string {
+		return "Hello, " + req.Name
+	})
+
+	// Start server
+	http.ListenAndServe(":8080", router)
+}
+```
+
+Run the server and test:
+```bash
+curl -i -X GET 'http://127.0.0.1:8080/greeting?name=world'
+```
+
+### Handler Function Signatures
+
+The framework supports multiple handler signatures:
+
+```go
+// Simple handler
+router.Get("/health", func(ctx context.Context) string {
+	return "OK"
+})
+
+// Handler with request binding
+router.Post("/users", func(ctx context.Context, req struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}) (map[string]interface{}, error) {
+	// Return data and error
+	return map[string]interface{}{
+		"id":    1,
+		"name":  req.Name,
+		"email": req.Email,
+	}, nil
+})
+
+// Handler with error return
+router.Get("/admin", func(ctx context.Context, req struct {
+	Token string `header:"Authorization"`
+}) error {
+	if req.Token != "secret" {
+		return web.Error(401, "unauthorized")
+	}
+	return nil
+})
+```
 
 ## Router
 
@@ -102,42 +186,8 @@ type Router interface {
 ```
 </details>
 
-## Getting Started
+## Advanced Examples
 
-### HelloWorld
-
-```go
-package main
-
-import (
-	"context"
-	"net/http"
-
-	"go-spring.dev/web"
-)
-
-func main() {
-	var router = web.NewRouter()
-
-	router.Get("/greeting", func(ctx context.Context, req struct {
-		Name string `query:"name"`
-	}) string {
-		return "Hello, " + req.Name
-	})
-
-	http.ListenAndServe(":8080", router)
-}
-```
-
-```
-$ curl -i -X GET 'http://127.0.0.1:8080/greeting?name=world'
-HTTP/1.1 200 OK
-Content-Type: application/json; charset=utf-8
-Date: Mon, 25 Dec 2023 06:13:03 GMT
-Content-Length: 33
-
-{"code":0,"data":"Hello, world"}
-```
 
 ### Custom Render
 
@@ -183,6 +233,56 @@ func main() {
 	*/
 }
 
+```
+
+### HTML Rendering
+
+The framework provides built-in HTML rendering support for both plain HTML strings and HTML templates.
+
+```go
+package main
+
+import (
+	"context"
+	"html/template"
+	"net/http"
+
+	"go-spring.dev/web"
+)
+
+func main() {
+	router := web.NewRouter()
+
+	// Render plain HTML string
+	router.Get("/html", func(ctx context.Context) error {
+		return web.FromContext(ctx).HTML(200, "<h1>Hello, HTML!</h1><p>This is plain HTML rendering.</p>")
+	})
+
+	// Render HTML template
+	tmpl := template.Must(template.New("home").Parse(`
+		<!DOCTYPE html>
+		<html>
+		<head><title>{{.Title}}</title></head>
+		<body>
+			<h1>{{.Title}}</h1>
+			<p>Welcome, {{.Name}}!</p>
+		</body>
+		</html>
+	`))
+
+	router.Get("/template", func(ctx context.Context) error {
+		data := struct {
+			Title string
+			Name  string
+		}{
+			Title: "Home Page",
+			Name:  "Visitor",
+		}
+		return web.FromContext(ctx).HTMLTemplate(200, tmpl, "home", data)
+	})
+
+	http.ListenAndServe(":8080", router)
+}
 ```
 
 ### Custom validator
@@ -341,6 +441,55 @@ func main() {
 	http.ListenAndServe(":8080", router)
 }
 
+```
+
+## Example Projects
+
+The repository includes complete example applications in the `examples/` directory:
+
+### 🎯 Basic Examples
+- **greeting/** - Simple greeting API with query parameter binding
+- **middleware/** - Middleware usage examples (access log, CORS, authentication)
+- **validator/** - Custom parameter validation using go-validator
+- **stdmux/** - Integration with standard `http.ServeMux`
+
+### 🚀 Advanced Examples
+- **petstore/** - Complete REST API example with models, routing, and custom renderer
+- **websocket/** - WebSocket integration example using go-netty-ws
+- **sse/** - Server-Sent Events (SSE) real-time communication example
+- **todo/** - Full-featured Todo REST API with CRUD operations and middleware
+
+### 📁 Project Structure
+```
+examples/
+├── greeting/
+│   └── main.go
+├── middleware/
+│   └── main.go
+├── validator/
+│   └── main.go
+├── stdmux/
+│   └── main.go
+├── petstore/
+│   ├── main.go
+│   ├── api/
+│   │   └── router.go
+│   └── models/
+│       ├── pet.go
+│       ├── user.go
+│       └── order.go
+├── websocket/
+│   └── main.go
+├── sse/
+│   └── main.go
+└── todo/
+    └── main.go
+```
+
+Run any example:
+```bash
+cd examples/greeting
+go run main.go
 ```
 
 ## Acknowledgments

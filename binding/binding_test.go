@@ -144,3 +144,154 @@ func TestScopeBind(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, expect, p)
 }
+
+func TestBind_NoContentType(t *testing.T) {
+	// Test GET request with no content-type (should be ignored)
+	ctx := &MockRequest{
+		method: "GET",
+		contentType: "",
+	}
+
+	var p struct{}
+	err := binding.Bind(&p, ctx)
+	assert.Nil(t, err)
+
+	// Test POST request with no content-type (should return ErrNoContentType)
+	ctx.method = "POST"
+	err = binding.Bind(&p, ctx)
+	assert.ErrorContains(t, err, "missing content type")
+	assert.Contains(t, err.Error(), "binding failed")
+}
+
+func TestRegisterBodyBinder(t *testing.T) {
+	called := false
+	customBinder := func(i interface{}, r binding.Request) error {
+		called = true
+		return nil
+	}
+
+	// Register custom binder for a test MIME type
+	binding.RegisterBodyBinder("test/mime", customBinder, "POST")
+
+	// Create a request with the custom MIME type
+	ctx := &MockRequest{
+		method: "POST",
+		contentType: "test/mime",
+	}
+
+	var p struct{}
+	err := binding.Bind(&p, ctx)
+	assert.Nil(t, err)
+	assert.True(t, called, "custom binder should be called")
+
+	// Test with wrong method (GET) - should not call custom binder
+	called = false
+	ctx.method = "GET"
+	err = binding.Bind(&p, ctx)
+	assert.Nil(t, err)
+	assert.False(t, called, "custom binder should not be called for GET")
+
+	// Test with unknown MIME type (should be ignored)
+	ctx.method = "POST"
+	ctx.contentType = "unknown/type"
+	err = binding.Bind(&p, ctx)
+	assert.Nil(t, err)
+}
+
+func TestRegisterValidator(t *testing.T) {
+	validationCalled := false
+	customValidator := func(i interface{}) error {
+		validationCalled = true
+		return fmt.Errorf("validation failed")
+	}
+
+	binding.RegisterValidator(customValidator)
+
+	// Create a simple request
+	ctx := &MockRequest{
+		method: "GET",
+	}
+
+	type TestStruct struct {
+		Name string `query:"name"`
+	}
+
+	var s TestStruct
+	err := binding.Bind(&s, ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "validate failed")
+	assert.True(t, validationCalled, "custom validator should be called")
+
+	// Reset validator to nil for other tests
+	binding.RegisterValidator(nil)
+}
+
+func TestBind_Errors(t *testing.T) {
+	// Test binding non-pointer
+	ctx := &MockRequest{method: "GET"}
+	var s struct{}
+	err := binding.Bind(s, ctx) // Not a pointer
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "is not pointer")
+
+	// Test binding non-struct pointer
+	var i int
+	err = binding.Bind(&i, ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "is not a struct pointer")
+
+	// Test binding with parse error
+	type BadStruct struct {
+		Num int `query:"num"`
+	}
+	ctx.queryParams = map[string]string{"num": "not-a-number"}
+	var bs BadStruct
+	err = binding.Bind(&bs, ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "binding failed")
+}
+
+func TestBindData_UnsupportedType(t *testing.T) {
+	// Test bindData with unsupported type (e.g., slice)
+	// This is internal function, but we can test through binding
+	type ComplexStruct struct {
+		Data []byte `query:"data"`
+	}
+	ctx := &MockRequest{
+		method: "GET",
+		queryParams: map[string]string{"data": "value"},
+	}
+	var cs ComplexStruct
+	err := binding.Bind(&cs, ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "binding failed")
+}
+
+func TestParseDurationError(t *testing.T) {
+	type DurationStruct struct {
+		D time.Duration `query:"d"`
+	}
+	ctx := &MockRequest{
+		method: "GET",
+		queryParams: map[string]string{"d": "invalid"},
+	}
+	var ds DurationStruct
+	err := binding.Bind(&ds, ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "binding failed")
+}
+
+func TestParseTimeError(t *testing.T) {
+	type TimeStruct struct {
+		T time.Time `query:"t"`
+	}
+	ctx := &MockRequest{
+		method: "GET",
+		queryParams: map[string]string{"t": "invalid-date"},
+	}
+	var ts TimeStruct
+	err := binding.Bind(&ts, ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "binding failed")
+}
+

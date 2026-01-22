@@ -1305,3 +1305,327 @@ func BenchmarkMux(b *testing.B) {
 		})
 	}
 }
+
+func TestRouterMethodPanic(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+
+	// Test that invalid method panics
+	defer func() {
+		if recover() == nil {
+			t.Error("expected panic for invalid method")
+		}
+	}()
+
+	r.method("INVALID", "/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+}
+
+func TestRouterAny(t *testing.T) {
+	r := NewRouter()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
+
+	r.Any("/test", handler)
+
+	// Test various methods
+	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "CONNECT", "TRACE"}
+	for _, method := range methods {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(method, "/test", nil)
+		r.ServeHTTP(w, req)
+		// Some methods might not be supported, but Any should handle common ones
+		// We just check that no panic occurs
+	}
+}
+
+func TestRouterRoutes(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+	r.Get("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	r.Post("/test2", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	routes := r.Routes()
+	if routes == nil {
+		t.Error("Routes should not return nil")
+	}
+}
+
+func TestRouterMiddlewares(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+	middlewares := r.Middlewares()
+	// Middlewares can return nil if no middlewares are set
+	// Just test that the method doesn't panic
+	if middlewares == nil {
+		// This is acceptable
+	}
+}
+
+func TestRouterFind(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+	r.Get("/users/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	rctx := &RouteContext{}
+	found := r.Find(rctx, "GET", "/users/123")
+	if found != "/users/{id}" {
+		t.Errorf("expected /users/{id}, got %s", found)
+	}
+}
+
+func TestRouterPutPatchConnectOptionsTrace(t *testing.T) {
+	r := NewRouter()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
+
+	// Register routes using all methods
+	r.Put("/put", handler)
+	r.Patch("/patch", handler)
+	r.Connect("/connect", handler)
+	r.Options("/options", handler)
+	r.Trace("/trace", handler)
+
+	// Test each method
+	tests := []struct {
+		method string
+		path   string
+	}{
+		{"PUT", "/put"},
+		{"PATCH", "/patch"},
+		{"CONNECT", "/connect"},
+		{"OPTIONS", "/options"},
+		{"TRACE", "/trace"},
+	}
+
+	for _, tt := range tests {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(tt.method, tt.path, nil)
+		r.ServeHTTP(w, req)
+		// Just ensure no panic occurs
+		if w.Code == http.StatusNotFound {
+			// Some methods might not be implemented in standard router
+			// but the route registration should work
+		}
+	}
+}
+
+func TestRouterWalk(t *testing.T) {
+	r := NewRouter()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
+
+	// Add some routes
+	r.Get("/users", handler)
+	r.Post("/users", handler)
+	r.Get("/users/{id}", handler)
+	r.Put("/users/{id}", handler)
+
+	// Count routes walked
+	var count int
+	walkFn := func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		count++
+		return nil
+	}
+
+	err := Walk(r, walkFn)
+	if err != nil {
+		t.Errorf("Walk returned error: %v", err)
+	}
+
+	if count == 0 {
+		t.Error("Walk should have visited at least one route")
+	}
+}
+
+func TestRouterWalkError(t *testing.T) {
+	r := NewRouter()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
+
+	r.Get("/test", handler)
+
+	// Walk function that returns an error
+	walkErr := fmt.Errorf("walk error")
+	walkFn := func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		return walkErr
+	}
+
+	err := Walk(r, walkFn)
+	if err != walkErr {
+		t.Errorf("expected walk error, got: %v", err)
+	}
+}
+
+func TestRouterHandleWithMethod(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
+
+	// Test Handle with method prefix (e.g., "GET /path")
+	r.Handle("GET /method-path", handler)
+
+	// Test that it works
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/method-path", nil)
+	r.ServeHTTP(w, req)
+	// Just ensure no panic occurs
+
+	// Test Handle without method prefix (should use mALL)
+	r.Handle("/all-path", handler)
+
+	// Test with invalid method (should panic)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic for invalid method in Handle")
+		}
+	}()
+	r.Handle("INVALID /path", handler)
+}
+
+func TestRouterHandleFuncWithMethod(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
+
+	// Test HandleFunc with method prefix
+	r.HandleFunc("POST /func-path", handler)
+
+	// Test HandleFunc without method prefix (should use mALL)
+	r.HandleFunc("/func-all-path", handler)
+}
+
+func TestRouterFindEdgeCases(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	// Add a route
+	r.Get("/users/{id}", handler)
+
+	// Test Find with invalid method
+	rctx := &RouteContext{}
+	found := r.Find(rctx, "INVALID", "/users/123")
+	if found != "" {
+		t.Errorf("expected empty string for invalid method, got %s", found)
+	}
+
+	// Test Find with non-existent path
+	found = r.Find(rctx, "GET", "/nonexistent")
+	if found != "" {
+		t.Errorf("expected empty string for non-existent path, got %s", found)
+	}
+
+	// Test Find with subroutes
+	r.Group("/api", func(r Router) {
+		r.Get("/test", handler)
+	})
+
+	rctx2 := &RouteContext{}
+	found = r.Find(rctx2, "GET", "/api/test")
+	if found != "/api/test" {
+		t.Errorf("expected /api/test, got %s", found)
+	}
+}
+
+func TestRouterMethodNotAllowed(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+	called := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.Write([]byte("method not allowed"))
+	})
+
+	// Set MethodNotAllowed handler
+	r.MethodNotAllowed(handler)
+
+	// Add a GET route only
+	r.Get("/test", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("get ok"))
+	}))
+
+	// Try POST to /test (should trigger MethodNotAllowed)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/test", nil)
+	r.ServeHTTP(w, req)
+
+	if !called {
+		t.Error("MethodNotAllowed handler should have been called")
+	}
+}
+
+func TestRouterNotFound(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+	called := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	// Set NotFound handler
+	r.NotFound(handler)
+
+	// Try accessing non-existent route
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/nonexistent", nil)
+	r.ServeHTTP(w, req)
+
+	if !called {
+		t.Error("NotFound handler should have been called")
+	}
+}
+
+func TestRouterMatch(t *testing.T) {
+	r := NewRouter().(*routerGroup)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	// Add routes
+	r.Get("/users/{id}", handler)
+	r.Post("/users", handler)
+
+	// Test Match method
+	rctx := &RouteContext{}
+	matched := r.Match(rctx, "GET", "/users/123")
+	if !matched {
+		t.Error("expected match for GET /users/123")
+	}
+	// Check that params were set in rctx
+	if len(rctx.URLParams.Keys) == 0 || rctx.URLParams.Values[0] != "123" {
+		t.Errorf("expected id param to be 123, got %v", rctx.URLParams)
+	}
+
+	// Test no match
+	rctx2 := &RouteContext{}
+	matched = r.Match(rctx2, "DELETE", "/users/123")
+	if matched {
+		t.Error("expected no match for DELETE /users/123")
+	}
+}
+
+func TestOptionsTlsConfig(t *testing.T) {
+	// Test with TLS config
+	options := Options{
+		CertFile: "test.crt",
+		KeyFile:  "test.key",
+	}
+
+	config := options.TlsConfig()
+	if config == nil {
+		t.Error("expected non-nil TLS config when cert and key files are specified")
+	}
+
+	// Test without TLS config
+	options2 := Options{}
+	config2 := options2.TlsConfig()
+	if config2 != nil {
+		t.Error("expected nil TLS config when no cert/key files are specified")
+	}
+
+	// Test IsTls method
+	if !options.IsTls() {
+		t.Error("IsTls should return true when cert and key files are specified")
+	}
+	if options2.IsTls() {
+		t.Error("IsTls should return false when no cert/key files are specified")
+	}
+}

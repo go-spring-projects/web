@@ -38,3 +38,25 @@ func TestJSONRenderer(t *testing.T) {
 	assert.Equal(t, "application/json; charset=utf-8", render.ContentType())
 	assert.Equal(t, "{\"foo\":\"bar\",\"html\":\"\\u003cb\\u003e\"}\n", w.Body.String())
 }
+
+func TestJSONRenderer_Indented(t *testing.T) {
+	data := map[string]any{
+		"foo": "bar",
+		"num": 42,
+	}
+
+	w := httptest.NewRecorder()
+
+	render := JsonRenderer{Data: data, Prefix: "", Indent: "  "}
+	err := render.Render(w)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "application/json; charset=utf-8", render.ContentType())
+	// With indentation, output should be pretty-printed
+	expected := `{
+  "foo": "bar",
+  "num": 42
+}
+`
+	assert.Equal(t, expected, w.Body.String())
+}
