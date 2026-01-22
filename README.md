@@ -270,7 +270,7 @@ func main() {
 		</html>
 	`))
 
-	router.Get("/template", func(ctx context.Context) error {
+	router.Get("/template", func(ctx context.Context) {
 		data := struct {
 			Title string
 			Name  string
@@ -278,7 +278,7 @@ func main() {
 			Title: "Home Page",
 			Name:  "Visitor",
 		}
-		return web.FromContext(ctx).HTMLTemplate(200, tmpl, "home", data)
+		web.FromContext(ctx).HTMLTemplate(200, tmpl, "home", data)
 	})
 
 	http.ListenAndServe(":8080", router)
@@ -441,55 +441,6 @@ func main() {
 	http.ListenAndServe(":8080", router)
 }
 
-```
-
-## Example Projects
-
-The repository includes complete example applications in the `examples/` directory:
-
-### 🎯 Basic Examples
-- **greeting/** - Simple greeting API with query parameter binding
-- **middleware/** - Middleware usage examples (access log, CORS, authentication)
-- **validator/** - Custom parameter validation using go-validator
-- **stdmux/** - Integration with standard `http.ServeMux`
-
-### 🚀 Advanced Examples
-- **petstore/** - Complete REST API example with models, routing, and custom renderer
-- **websocket/** - WebSocket integration example using go-netty-ws
-- **sse/** - Server-Sent Events (SSE) real-time communication example
-- **todo/** - Full-featured Todo REST API with CRUD operations and middleware
-
-### 📁 Project Structure
-```
-examples/
-├── greeting/
-│   └── main.go
-├── middleware/
-│   └── main.go
-├── validator/
-│   └── main.go
-├── stdmux/
-│   └── main.go
-├── petstore/
-│   ├── main.go
-│   ├── api/
-│   │   └── router.go
-│   └── models/
-│       ├── pet.go
-│       ├── user.go
-│       └── order.go
-├── websocket/
-│   └── main.go
-├── sse/
-│   └── main.go
-└── todo/
-    └── main.go
-```
-
-Run any example:
-```bash
-cd examples/greeting
-go run main.go
 ```
 
 ## Acknowledgments
