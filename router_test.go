@@ -1575,6 +1575,86 @@ func TestRouterNotFound(t *testing.T) {
 	}
 }
 
+func TestFallbackHandlersReceiveWebContext(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+		setup  func(root Router, fallback http.HandlerFunc)
+	}{
+		{
+			name:   "root not found",
+			method: http.MethodGet,
+			path:   "/missing",
+			setup: func(root Router, fallback http.HandlerFunc) {
+				root.NotFound(fallback)
+				root.Get("/known", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+			},
+		},
+		{
+			name:   "nested not found",
+			method: http.MethodGet,
+			path:   "/api/missing",
+			setup: func(root Router, fallback http.HandlerFunc) {
+				api := NewRouter()
+				api.NotFound(fallback)
+				api.Get("/known", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+				root.Mount("/api", api)
+			},
+		},
+		{
+			name:   "root method not allowed",
+			method: http.MethodPost,
+			path:   "/known",
+			setup: func(root Router, fallback http.HandlerFunc) {
+				root.MethodNotAllowed(fallback)
+				root.Get("/known", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+			},
+		},
+		{
+			name:   "nested method not allowed",
+			method: http.MethodPost,
+			path:   "/api/known",
+			setup: func(root Router, fallback http.HandlerFunc) {
+				api := NewRouter()
+				api.MethodNotAllowed(fallback)
+				api.Get("/known", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+				root.Mount("/api", api)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			seen := false
+			fallback := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				webCtx := FromContext(r.Context())
+				if webCtx == nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				seen = true
+				webCtx.SetHeader("X-Fallback-Method", webCtx.Method())
+				w.WriteHeader(http.StatusTeapot)
+			})
+			root := NewRouter()
+			tc.setup(root, fallback)
+
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(tc.method, tc.path, nil)
+			root.ServeHTTP(response, request)
+
+			if !seen {
+				t.Fatal("fallback handler did not receive web.Context")
+			}
+			if response.Code != http.StatusTeapot {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusTeapot)
+			}
+			if value := response.Header().Get("X-Fallback-Method"); value != tc.method {
+				t.Fatalf("fallback method header = %q, want %q", value, tc.method)
+			}
+		})
+	}
+}
+
 func TestRouterMatch(t *testing.T) {
 	r := NewRouter().(*routerGroup)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})

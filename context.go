@@ -19,6 +19,7 @@ package web
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"io"
 	"mime/multipart"
 	"net"
@@ -29,7 +30,6 @@ import (
 	"unicode"
 	"unsafe"
 
-	"html/template"
 	"go-spring.dev/web/binding"
 	"go-spring.dev/web/render"
 )
@@ -346,10 +346,13 @@ func (c *Context) ClientIP() string {
 }
 
 // SSE creates a new Server-Sent Events sender for streaming events to the client.
-// It sets the required HTTP headers for SSE and returns an SSESender interface.
-// If the underlying http.ResponseWriter does not support flushing, an error is returned.
-func (c *Context) SSE() (SSESender, error) {
-	return NewSSE(c.Writer)
+func (c *Context) SSE(options ...SSEOption) (SSESender, error) {
+	return NewSSE(c.Writer, options...)
+}
+
+// SSELastEventID returns the ID sent by a reconnecting EventSource client.
+func (c *Context) SSELastEventID() string {
+	return SSELastEventID(c.Request)
 }
 
 type routeContextKey struct{}

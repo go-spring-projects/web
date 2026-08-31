@@ -173,16 +173,16 @@ func (rg *routerGroup) Renderer(renderer Renderer) Router {
 
 func (rg *routerGroup) NotFoundHandler() http.Handler {
 	if rg.notFoundHandler != nil {
-		return rg.notFoundHandler
+		return warpContext(rg.notFoundHandler)
 	}
-	return notFound()
+	return warpContext(notFound().ServeHTTP)
 }
 
 func (rg *routerGroup) NotAllowedHandler() http.Handler {
 	if rg.notAllowedHandler != nil {
-		return rg.notAllowedHandler
+		return warpContext(rg.notAllowedHandler)
 	}
-	return notAllowed()
+	return warpContext(notAllowed().ServeHTTP)
 }
 
 // ServeHTTP dispatches the handler registered in the matched route.

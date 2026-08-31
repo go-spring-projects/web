@@ -44,7 +44,7 @@
 ### 🔌 Extensibility & Compatibility
 - **Custom Renderers**: Customize global or route-specific response formats
 - **Built-in Middlewares**: Includes `NoCache`, `Recovery`, `Profiler`, and more
-- **SSE Support**: Full Server-Sent Events implementation with `web.NewSSE()`
+- **SSE Support**: Managed streams with `web.SSEHandler()`, event IDs, reconnect support, and write deadlines
 - **WebSocket Integration**: Easy WebSocket handler integration
 - **Standard Library Compatibility**: Works seamlessly with `net/http` and existing middleware
 
@@ -188,6 +188,38 @@ type Router interface {
 
 ## Advanced Examples
 
+### Server-Sent Events
+
+Use `SSEHandler` for mapped routes so the default response renderer is not run
+after the stream ends:
+
+```go
+router.Get("/events", web.SSEHandler(
+    func(ctx context.Context, sender web.SSESender) error {
+        lastID := web.FromContext(ctx).SSELastEventID()
+        _ = lastID // Resume application state when the client reconnects.
+
+        ticker := time.NewTicker(time.Second)
+        defer ticker.Stop()
+        for {
+            select {
+            case <-ctx.Done():
+                return ctx.Err()
+            case now := <-ticker.C:
+                if err := sender.SendEvent(web.SSEEvent{
+                    ID:    strconv.FormatInt(now.Unix(), 10),
+                    Event: "time",
+                    Data:  now.Format(time.RFC3339),
+                }); err != nil {
+                    return err
+                }
+            }
+        }
+    },
+    web.WithSSEWriteTimeout(5*time.Second),
+    web.WithSSEHeartbeat(15*time.Second, "keep-alive"),
+))
+```
 
 ### Custom Render
 

@@ -12,25 +12,20 @@ import (
 func main() {
 	router := web.NewRouter()
 
-	// SSE endpoint that sends server time every second
-	router.Get("/sse/time", func(ctx context.Context) error {
-		// Get the web context to access ResponseWriter
-		wc := web.FromContext(ctx)
-
-		// Create SSE sender
-		sse, err := web.NewSSE(wc.Writer)
-		if err != nil {
-			return web.Error(500, "Failed to create SSE connection: "+err.Error())
-		}
-
+	// SSE endpoint that sends server time every second.
+	router.Get("/sse/time", web.SSEHandler(func(ctx context.Context, sse web.SSESender) error {
 		// Send initial event
-		sse.SendJSON("connected", map[string]interface{}{
+		if err := sse.SendJSON("connected", map[string]interface{}{
 			"message": "SSE connection established",
 			"time":    time.Now().Format(time.RFC3339),
-		})
+		}); err != nil {
+			return err
+		}
 
 		// Send retry interval (3 seconds)
-		sse.SendRetry(3000)
+		if err := sse.SendRetry(3000); err != nil {
+			return err
+		}
 
 		// Send time updates every second
 		ticker := time.NewTicker(1 * time.Second)
@@ -39,27 +34,19 @@ func main() {
 		for {
 			select {
 			case <-ctx.Done():
-				// Client disconnected
-				sse.SendJSON("disconnected", map[string]interface{}{
-					"message": "Client disconnected",
-					"time":    time.Now().Format(time.RFC3339),
-				})
-				sse.Close()
-				return nil
+				return ctx.Err()
 			case t := <-ticker.C:
 				// Send time update
-				sse.SendJSON("time", map[string]interface{}{
+				if err := sse.SendJSON("time", map[string]interface{}{
 					"timestamp": t.Unix(),
 					"formatted": t.Format(time.RFC3339),
-				})
-
-				// Send a comment every 5 seconds (client ignores but keeps connection alive)
-				if t.Second()%5 == 0 {
-					sse.SendComment(fmt.Sprintf("Heartbeat at %s", t.Format(time.RFC3339)))
+				}); err != nil {
+					return err
 				}
+
 			}
 		}
-	})
+	}, web.WithSSEHeartbeat(5*time.Second, "keep-alive")))
 
 	// HTML page to test SSE
 	router.Get("/", func(ctx context.Context) {
@@ -124,13 +111,6 @@ func main() {
             eventSource.addEventListener('time', function(event) {
                 const data = JSON.parse(event.data);
                 addEvent('Time update: ' + data.formatted + ' (timestamp: ' + data.timestamp + ')', 'info');
-            });
-
-            eventSource.addEventListener('disconnected', function(event) {
-                const data = JSON.parse(event.data);
-                addEvent('Disconnected: ' + data.message + ' at ' + data.time, 'info');
-                eventSource.close();
-                eventSource = null;
             });
 
             eventSource.onerror = function(error) {
